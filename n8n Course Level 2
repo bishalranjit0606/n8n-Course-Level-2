@@ -1,0 +1,199 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "{{ AIRTABLE_BASE_ID }}",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "{{ AIRTABLE_TABLE_ID }}",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [-64, 2960],
+      "id": "search_records",
+      "name": "Search records",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "AIRTABLE_CREDENTIAL",
+          "name": "Airtable PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://restcountries.com/v3.1/all",
+        "sendQuery": true,
+        "specifyQuery": "json",
+        "jsonQuery": "{ \"fields\": \"name,region,subregion\" }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [-80, 3184],
+      "id": "http_countries",
+      "name": "Fetch Countries"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "customerCountry",
+              "field2": "name.common"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [144, 2960],
+      "id": "merge_country_data",
+      "name": "Merge Country Data"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "{{ AIRTABLE_BASE_ID }}",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "{{ AIRTABLE_TABLE_ID }}",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "id": "={{ $json.id }}",
+            "region": "={{ $json.region }}",
+            "subregion": "={{ $json.subregion }}"
+          },
+          "matchingColumns": ["id"]
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.1,
+      "position": [352, 2960],
+      "id": "update_airtable",
+      "name": "Update Airtable",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "AIRTABLE_CREDENTIAL",
+          "name": "Airtable PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "{{ EXTERNAL_WEBHOOK_URL }}",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "api_key",
+              "value": "{{ EXTERNAL_API_KEY }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "unique_id",
+              "value": "{{ UNIQUE_WORKFLOW_ID }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [176, 3264],
+      "id": "external_http",
+      "name": "External API Call"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "Workflow completed successfully.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [1872, 3648],
+      "id": "discord_success",
+      "name": "Discord Success",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "DISCORD_WEBHOOK",
+          "name": "Discord Webhook"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-80, 3392],
+      "id": "manual_trigger",
+      "name": "Manual Trigger"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [-80, 3728],
+      "id": "error_trigger",
+      "name": "Error Trigger"
+    },
+    {
+      "parameters": {
+        "authentication": "webhook",
+        "content": "Workflow failed: {{ $json.execution.error.message }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [144, 3728],
+      "id": "discord_error",
+      "name": "Discord Error",
+      "credentials": {
+        "discordWebhookApi": {
+          "id": "DISCORD_WEBHOOK",
+          "name": "Discord Webhook"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Search records": {
+      "main": [[{ "node": "Merge Country Data", "type": "main", "index": 0 }]]
+    },
+    "Fetch Countries": {
+      "main": [[{ "node": "Merge Country Data", "type": "main", "index": 1 }]]
+    },
+    "Merge Country Data": {
+      "main": [[{ "node": "Update Airtable", "type": "main", "index": 0 }]]
+    },
+    "Manual Trigger": {
+      "main": [[
+        { "node": "Search records", "type": "main", "index": 0 },
+        { "node": "External API Call", "type": "main", "index": 0 }
+      ]]
+    },
+    "Error Trigger": {
+      "main": [[{ "node": "Discord Error", "type": "main", "index": 0 }]]
+    }
+  }
+}
